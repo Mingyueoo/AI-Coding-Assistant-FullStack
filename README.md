@@ -20,7 +20,7 @@ Pull the default model:
 ollama pull llama3.2
 ```
 
-### 1. Clone & set up environment
+### 2. Clone & set up environment
 
 ```bash
 git clone https://github.com/Mingyueoo/AI-Coding-Assistant-FullStack.git
@@ -31,7 +31,7 @@ source venv/bin/activate        # Windows: venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-### 2. Configure environment
+### 3. Configure environment
 
 ```bash
 cp .env
@@ -39,7 +39,7 @@ cp .env
 
 ```
 
-### 3. Run the app
+### 4. Run the app
 
 ```bash
 python run.py
@@ -47,7 +47,7 @@ python run.py
 
 Open **http://localhost:5000**
 
-### 4. (Optional) Seed demo data
+### 5. (Optional) Seed demo data
 
 ```bash
 python seed_data.py
@@ -145,7 +145,7 @@ curl http://localhost:5000/api/analytics
 
 ---
 
-## 🤖 Supported Models
+## Supported Models
 
 | Model | Description                                                 |
 |-------|-------------------------------------------------------------|
@@ -156,7 +156,7 @@ curl http://localhost:5000/api/analytics
 
 ---
 
-## 🗄️ Database Schema
+## Database Schema
 
 ```
 Prompt (id, prompt_text, model_name, created_at)
@@ -180,7 +180,7 @@ Prompt (id, prompt_text, model_name, created_at)
 
 ---
 
-## 🔧 Configuration (`.env`)
+## Configuration (`.env`)
 
 ```env
 # --- Flask Basic Configuration ---
