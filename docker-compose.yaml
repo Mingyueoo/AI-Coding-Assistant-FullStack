@@ -1,0 +1,35 @@
+services:
+  web:
+    build: .
+    container_name: ai_coding_assistant
+    ports:
+      - "5000:5000"
+    volumes:
+      - .:/app  # 代码热重载：本地改动直接同步到容器
+    depends_on:
+      - db  # 确保数据库先启动
+    env_file:
+      - .env    # 自动加载你的 API Keys 和配置
+    environment:
+      - FLASK_ENV=development
+      - PYTHONUNBUFFERED=1
+      - OLLAMA_BASE_URL=http://host.docker.internal:11434/api/generate
+      - OLLAMA_MODEL=llama3.2
+        # 告诉 Flask 连接 Docker 里的 Postgres
+      - DATABASE_URL=postgresql://ai_user:ai_password@db:5432/ai_db
+  db:
+    image: postgres:15-alpine  # 使用轻量级版本
+    container_name: ai_postgres
+    environment:
+      - POSTGRES_USER=ai_user
+      - POSTGRES_PASSWORD=ai_password
+      - POSTGRES_DB=ai_db
+    ports:
+      - "5432:5432"  # 映射到宿主机，方便你用 Navicat/DBeaver 查看数据
+    volumes:
+      - postgres_data:/var/lib/postgresql/data  # 数据持久化，重启不丢失数据
+
+    restart: always
+# 声明数据卷
+volumes:
+  postgres_data:

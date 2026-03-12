@@ -9,7 +9,7 @@ import requests
 
 logger = logging.getLogger(__name__)
 
-SUPPORTED_MODELS = ["mock-gpt","ollama-llama", "openai-gpt4", "anthropic-claude"]
+SUPPORTED_MODELS = ["mock-gpt","ollama-llama", "openai-gpt4", "anthropic-claude","mock-codellama"]
 
 # Template library for mock generation
 MOCK_TEMPLATES = {
