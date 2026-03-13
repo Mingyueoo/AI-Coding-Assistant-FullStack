@@ -7,6 +7,7 @@ from flask import Blueprint, render_template, request, redirect, url_for, flash
 from app.db import db
 from app.models import Prompt, Generation
 from app.services import model_service
+from app.workers.tasks import task_generate_code, task_evaluate_code
 
 logger = logging.getLogger(__name__)
 
@@ -48,7 +49,10 @@ def generate():
 
     error = None
     try:
-        code = model_service.generate_code(prompt_text, model_name)
+        code = task_generate_code.apply_async(
+            args=[prompt_text, model_name],
+            queue="celery",
+        ).get(timeout=120)
         generation.generated_code = code
         generation.status = "generated"
     except Exception as e:
@@ -125,7 +129,10 @@ def evaluate(prompt_id: int):
         return redirect(url_for("web.history"))
 
     from app.models import Evaluation
-    eval_result = evaluation_service.evaluate_code(latest_gen.generated_code)
+    eval_result = task_evaluate_code.apply_async(
+        args=[latest_gen.generated_code],
+        queue="celery",
+    ).get(timeout=60)
     ev = Evaluation(
         generation_id=latest_gen.id,
         result=eval_result["result"],

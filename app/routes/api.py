@@ -7,6 +7,7 @@ from flask import Blueprint, request, jsonify
 from app.db import db
 from app.models import Prompt, Generation, Evaluation
 from app.services import model_service, evaluation_service
+from app.workers.tasks import task_generate_code, task_evaluate_code
 
 logger = logging.getLogger(__name__)
 
@@ -44,7 +45,10 @@ def create_prompt():
     db.session.flush()
 
     try:
-        code = model_service.generate_code(prompt_text, model_name)
+        code = task_generate_code.apply_async(
+            args=[prompt_text, model_name],
+            queue="celery",
+        ).get(timeout=120)
         generation.generated_code = code
         generation.status = "generated"
         db.session.commit()
@@ -125,7 +129,10 @@ def evaluate_prompt(prompt_id: int):
         return _error("No generated code found for this prompt. Generate code first.")
 
     try:
-        eval_result = evaluation_service.evaluate_code(latest_gen.generated_code)
+        eval_result = task_evaluate_code.apply_async(
+            args=[latest_gen.generated_code],
+            queue="celery",
+        ).get(timeout=60)
         evaluation = Evaluation(
             generation_id=latest_gen.id,
             result=eval_result["result"],

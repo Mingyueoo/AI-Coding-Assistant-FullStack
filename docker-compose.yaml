@@ -15,8 +15,8 @@ services:
       - PYTHONUNBUFFERED=1
       - OLLAMA_BASE_URL=http://host.docker.internal:11434/api/generate
       - OLLAMA_MODEL=llama3.2
-        # 告诉 Flask 连接 Docker 里的 Postgres
       - DATABASE_URL=postgresql://ai_user:ai_password@db:5432/ai_db
+      - REDIS_URL=redis://redis:6379/0
   db:
     image: postgres:15-alpine  # 使用轻量级版本
     container_name: ai_postgres
@@ -28,6 +28,27 @@ services:
       - "5432:5432"  # 映射到宿主机，方便你用 Navicat/DBeaver 查看数据
     volumes:
       - postgres_data:/var/lib/postgresql/data  # 数据持久化，重启不丢失数据
+  redis:
+    image: redis:7-alpine
+    container_name: ai_redis
+    ports:
+      - "6379:6379"
+  worker:
+    build: .
+    container_name: ai_worker
+    # 注意：这里的启动命令需要根据你代码中 celery 实例的位置进行微调
+    # 假设你在 app/app.py 或 app/__init__.py 中定义了 celery = Celery(__name__)
+    command: celery -A app.workers.celery_app worker --loglevel=info
+    volumes:
+      - .:/app
+    depends_on:
+      - db
+      - redis
+    environment:
+      - DATABASE_URL=postgresql://ai_user:ai_password@db:5432/ai_db
+      - REDIS_URL=redis://redis:6379/0
+      - OLLAMA_BASE_URL=http://host.docker.internal:11434/api/generate
+      - OLLAMA_MODEL=llama3.2
 
     restart: always
 # 声明数据卷

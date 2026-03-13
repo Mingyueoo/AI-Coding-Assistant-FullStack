@@ -1,17 +1,88 @@
-# 🤖 AI Coding Assistant — Full-Stack Python System
+# 🤖 AI Coding Assistant — Scalable AI Backend System
+A production-style AI backend system for generating, executing, and evaluating Python Matplotlib code using Large Language Models.
 
-A production-grade Flask web application for AI-powered Matplotlib code generation, evaluation, and analytics. Built to demonstrate full-stack Python engineering: REST API design, database persistence, local/cloud LLM integration (Ollama/OpenAI), code execution/evaluation, and data analytics.
+This project demonstrates modern AI backend architecture including:
+
+- REST API design
+
+- asynchronous task processing
+
+- containerized deployment
+
+- scalable AI inference pipelines
+
+- database persistence and analytics
+
+It integrates local LLM inference (Ollama) and cloud models (OpenAI / Anthropic) while supporting secure code execution and system analytics.
+
 ### Intelligent Code Generation & Validation
 ![Generation Interface & Evaluation Result](docs/screenshots/generation.gif)
 
 *A seamless workflow: generating complex Matplotlib code via local Llama 3.2 (Ollama) and instantly verifying it through a secure, restricted execution environment.*
 
 ---
+## Architecture Overview
+The system follows a modern AI backend architecture with asynchronous task processing.
 
-## Quick Start
+```text
+Client
+   │
+   ▼
+Flask API Server
+   │
+   ▼
+Redis Task Queue
+   │
+   ▼
+Celery Worker
+   │
+   ├── LLM Code Generation
+   ├── Code Evaluation Sandbox
+   └── Analytics Pipeline
+   │
+   ▼
+PostgreSQL Database
+```
+### Key Characteristics
 
-### 1. Set up Local AI (Ollama)
-This project uses Ollama for free, local inference.
+- Async AI processing using Celery workers
+- Redis message queue for task distribution
+- PostgreSQL persistence layer
+- Docker containerized micro-services
+- Pluggable AI model providers
+
+## Intelligent Code Generation Workflow
+Workflow:
+```text
+User Prompt
+   │
+   ▼
+API Endpoint (/api/prompts)
+   │
+   ▼
+Task queued in Redis
+   │
+   ▼
+Celery Worker processes task
+   │
+   ├── Generate Matplotlib code via LLM
+   ├── Execute code in restricted sandbox
+   └── Store results in PostgreSQL
+
+```
+## Quick Start (Docker Recommended)
+
+
+### 1. Install prerequisites
+Install:
+
+- Docker
+
+- Docker Compose
+
+- Ollama (for local models)
+
+Download Ollama:
 
 [Download and install Ollama](https://ollama.com/)
 
@@ -20,38 +91,49 @@ Pull the default model:
 ollama pull llama3.2
 ```
 
-### 2. Clone & set up environment
+### 2. Clone repository
 
 ```bash
 git clone https://github.com/Mingyueoo/AI-Coding-Assistant-FullStack.git
 cd ai_coding_assistant
-
-python -m venv venv
-source venv/bin/activate        # Windows: venv\Scripts\activate
-pip install -r requirements.txt
 ```
 
 ### 3. Configure environment
-
+Create `.env`
 ```bash
-cp .env
-# Edit .env if needed (works out of the box with mock models)
+FLASK_ENV=development
+
+DATABASE_URL=postgresql://ai_user:ai_password@db:5432/ai_db
+
+REDIS_URL=redis://redis:6379/0
+
+OLLAMA_BASE_URL=http://host.docker.internal:11434/api/generate
+OLLAMA_MODEL=llama3.2
 
 ```
-
-### 4. Run the app
+Optional cloud models:
+```text
+OPENAI_API_KEY=sk-...
+ANTHROPIC_API_KEY=sk-ant-...
+```
+### 4. Start the system
 
 ```bash
-python run.py
+docker-compose up --build
+```
+Services started:
+```text
+web      → Flask API server
+worker   → Celery AI worker
+db       → PostgreSQL
+redis    → task queue
+```
+Open:
+```text
+http://localhost:5000
 ```
 
-Open **http://localhost:5000**
 
-### 5. (Optional) Seed demo data
-
-```bash
-python seed_data.py
-```
 
 ---
 
@@ -59,33 +141,38 @@ python seed_data.py
 
 ```
 ai_coding_assistant/
-├── run.py                      # Entry point
-├── seed_data.py                # Demo data seeder
+
+├── Dockerfile
+├── docker-compose.yaml
+├── run.py
+├── seed_data.py
 ├── requirements.txt
 ├── .env
+
 └── app/
-    ├── app.py                  # Flask app factory
-    ├── db.py                   # SQLAlchemy instance
+    ├── app.py
+    ├── db.py
+
     ├── models/
-    │   ├── prompt.py           # Prompt table
-    │   ├── generation.py       # Generation table
-    │   └── evaluation.py       # Evaluation table
+    │   ├── prompt.py
+    │   ├── generation.py
+    │   └── evaluation.py
+
     ├── routes/
-    │   ├── api.py              # REST API blueprints
-    │   └── web.py              # HTML page blueprints
+    │   ├── api.py
+    │   └── web.py
+
     ├── services/
-    │   ├── model_service.py    # Code generation (mock + real models)
-    │   ├── evaluation_service.py # Safe code execution & evaluation
-    │   └── analytics_service.py  # Pandas/SQLAlchemy analytics + charts
+    │   ├── model_service.py
+    │   ├── evaluation_service.py
+    │   └── analytics_service.py
+
+    ├── workers/
+    │   ├── celery_app.py
+    │   └── tasks.py
+
     ├── templates/
-    │   ├── base.html
-    │   ├── index.html          # Home / generator
-    │   ├── result.html         # Code output + evaluation
-    │   ├── history.html        # Paginated prompt history
-    │   └── dashboard.html      # Analytics dashboard
     └── static/
-        ├── css/style.css
-        └── js/app.js
 ```
 
 ---
@@ -101,109 +188,169 @@ ai_coding_assistant/
 | `GET` | `/api/analytics` | System analytics (JSON) |
 
 ### Example: Generate Code
+```text
+POST /api/prompts
+```
 
 ```bash
 curl -X POST http://localhost:5000/api/prompts \
-  -H "Content-Type: application/json" \
-  -d '{"prompt_text": "plot a bar chart of monthly revenue", "model_name": "mock-gpt"}'
+-H "Content-Type: application/json" \
+-d '{"prompt_text":"plot a bar chart","model_name":"ollama-llama"}'
 ```
-
+Response:
 ```json
 {
-  "prompt_id": 1,
-  "generation_id": 1,
-  "generated_code": "import matplotlib.pyplot as plt\n...",
-  "status": "generated"
+ "prompt_id":1,
+ "generation_id":1,
+ "task_id":"af12c98",
+ "status":"queued"
 }
 ```
-
-### Example: Evaluate Code
-
-```bash
-curl -X POST http://localhost:5000/api/prompts/1/evaluate
-```
-
-```json
-{
-  "evaluation_id": 1,
-  "evaluation_result": "correct",
-  "error_message": null
-}
-```
-
-### Example: Paginated History
-
-```bash
-curl "http://localhost:5000/api/prompts?page=1&per_page=5&model_name=mock-gpt"
-```
-
-### Example: Analytics
-
-```bash
-curl http://localhost:5000/api/analytics
-```
+The AI pipeline runs asynchronously in the Celery worker.
 
 ---
 
 ## Supported Models
 
-| Model | Description                                                 |
-|-------|-------------------------------------------------------------|
-| `mock-gpt` | Simulated GPT — generates correct templates instantly       |
-| `ollama-llama` | Local model — lama 3.2 running via Ollama. Private and free |
-| `openai-gpt4` | Real OpenAI GPT-4o (requires `OPENAI_API_KEY`)              |
-| `anthropic-claude` | Real Claude (requires `ANTHROPIC_API_KEY`)                  |
+| Model            | Description                      |
+| ---------------- | -------------------------------- |
+| mock-gpt         | Simulated model for fast testing |
+| ollama-llama     | Local Llama 3.2 via Ollama       |
+| openai-gpt4      | OpenAI GPT models                |
+| anthropic-claude | Anthropic Claude                 |
+
 
 ---
 
 ## Database Schema
 
-```
-Prompt (id, prompt_text, model_name, created_at)
-   └─→ Generation (id, prompt_id FK, generated_code, status, created_at)
-            └─→ Evaluation (id, generation_id FK, result, error_message, created_at)
+```text
+Prompt
+ └── Generation
+        └── Evaluation
 ```
 
-- **result**: `correct` | `partially_correct` | `failed`
-- **status**: `pending` | `generated` | `failed`
+```text
+Prompt
+(id, prompt_text, model_name, created_at)
+
+Generation
+(id, prompt_id, generated_code, status, created_at)
+
+Evaluation
+(id, generation_id, result, error_message, created_at)
+```
+
+Statuses:
+```text
+pending
+generated
+failed
+```
+
+Evaluation results:
+```text
+correct
+partially_correct
+failed
+```
+---
+
+## Analytics
+
+System analytics includes:
+
+- model success rate
+
+- error distribution
+
+- prompt usage statistics
+
+Powered by:
+```text
+Pandas
+SQLAlchemy
+Matplotlib
+```
+
+## Technology Stack
+### Backend
+
+- Flask
+
+- SQLAlchemy
+
+- Celery
+
+- Redis
+
+### Infrastructure
+
+- Docker
+
+- Docker Compose
+
+- PostgreSQL
+
+### AI / ML
+
+- Ollama
+
+- OpenAI API
+
+- Anthropic Claude
+
+### Data & Visualization
+
+- Pandas
+
+- Matplotlib
+
+- Frontend
+
+- Jinja2
+
+- Bootstrap
 
 ---
 
-## Features
+## Engineering Highlights
 
-- **Code Generation** — Template-based mock models + real LLM integration
-- **Code Evaluation** — Safe AST parse + restricted exec with error classification
-- **REST API** — Full CRUD with pagination and filtering
-- **Analytics** — Pandas aggregation: success rates, per-model accuracy, error distribution
-- **Dashboard** — Live Matplotlib charts rendered as base64 PNG
-- **History** — Searchable, paginated, filterable prompt history
+This project demonstrates several real-world backend engineering patterns:
+
+### AI Backend Architecture
+
+- async AI task processing
+
+- queue-based job execution
+
+- scalable worker architecture
+
+### Production Infrastructure
+
+- containerized services
+
+- environment-based configuration
+
+- persistent database layer
+
+### Safe Code Execution
+
+- AST parsing
+
+- restricted execution environment
+
+- error classification
 
 ---
+## Portfolio Context
 
-## Configuration (`.env`)
+This project was built to demonstrate AI backend engineering skills, including:
 
-```env
-# --- Flask Basic Configuration ---
-FLASK_APP=app.py
-FLASK_ENV=development
-SECRET_KEY=your-secret-key-change-in-production
-DATABASE_URL=sqlite:///ai_coding_assistant.db
+- LLM system integration
 
-# --- Ollama (Local AI) ---
-DEFAULT_MODEL=ollama-llama
+- asynchronous processing pipelines
 
-# --- Cloud API Configuration (Optional) ---
-# Uncomment to use OpenAI
-# OPENAI_API_KEY=sk-...
-# ANTHROPIC_API_KEY=sk-ant-...
-```
+- containerized deployment
 
----
-
-## Tech Stack
-
-- **Backend**: Flask 3, SQLAlchemy 2, Flask-SQLAlchemy
-- **AI/Inference**: Ollama (Llama 3.2), OpenAI API
-- **Data**: Pandas, Matplotlib
-- **Frontend**: Jinja2, Bootstrap 5, Bootstrap Icons
-- **Storage**: SQLite (default), PostgreSQL-compatible via `DATABASE_URL`
+- database-driven AI services
