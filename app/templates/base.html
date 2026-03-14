@@ -70,10 +70,12 @@
         <table class="table table-bordered table-sm">
           <thead class="table-dark"><tr><th>Method</th><th>Endpoint</th><th>Description</th></tr></thead>
           <tbody>
-            <tr><td><span class="badge bg-success">POST</span></td><td><code>/api/prompts</code></td><td>Create prompt & generate code</td></tr>
+            <tr><td><span class="badge bg-success">POST</span></td><td><code>/api/prompts</code></td><td>Create prompt & enqueue generation (returns 202)</td></tr>
+            <tr><td><span class="badge bg-primary">GET</span></td><td><code>/api/generations/{id}</code></td><td>Poll generation status (for wait page)</td></tr>
             <tr><td><span class="badge bg-primary">GET</span></td><td><code>/api/prompts</code></td><td>List prompts (paginated, filterable)</td></tr>
             <tr><td><span class="badge bg-primary">GET</span></td><td><code>/api/prompts/{id}</code></td><td>Get single prompt with generations</td></tr>
-            <tr><td><span class="badge bg-success">POST</span></td><td><code>/api/prompts/{id}/evaluate</code></td><td>Evaluate generated code</td></tr>
+            <tr><td><span class="badge bg-success">POST</span></td><td><code>/api/prompts/{id}/evaluate</code></td><td>Enqueue evaluation (returns 202)</td></tr>
+            <tr><td><span class="badge bg-primary">GET</span></td><td><code>/api/evaluations/{id}</code></td><td>Poll evaluation status (for wait page)</td></tr>
             <tr><td><span class="badge bg-primary">GET</span></td><td><code>/api/analytics</code></td><td>Get system analytics</td></tr>
           </tbody>
         </table>

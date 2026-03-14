@@ -80,7 +80,9 @@
           </td>
           <td>
             {% if latest_eval %}
-              {% if latest_eval.result == 'correct' %}
+              {% if latest_eval.result == 'pending' %}
+                <span class="badge bg-info">⏳ Evaluating...</span>
+              {% elif latest_eval.result == 'correct' %}
                 <span class="badge bg-success">✅ Correct</span>
               {% elif latest_eval.result == 'partially_correct' %}
                 <span class="badge bg-warning text-dark">⚠️ Partial</span>

@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}Generating... – AI Coding Assistant{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-lg-8 text-center py-5">
+    <div class="spinner-border text-primary mb-4" role="status" style="width:4rem;height:4rem;">
+      <span class="visually-hidden">Loading...</span>
+    </div>
+    <h4 class="mb-2">Generating code...</h4>
+    <p class="text-muted mb-4">Your request is being processed. This page will refresh when ready.</p>
+    <p class="small text-muted">Generation ID: {{ generation.id }}</p>
+    <a href="{{ url_for('web.history') }}" class="btn btn-outline-secondary btn-sm">Cancel & go to History</a>
+  </div>
+</div>
+
+<script>
+(function poll() {
+  fetch("{{ url_for('api.get_generation_status', generation_id=generation.id) }}")
+    .then(r => r.json())
+    .then(data => {
+      if (data.status === "generated" || data.status === "failed") {
+        window.location.href = "{{ url_for('web.generate_result', generation_id=generation.id) }}";
+        return;
+      }
+      setTimeout(poll, 1500);
+    })
+    .catch(() => setTimeout(poll, 2000));
+})();
+</script>
+{% endblock %}

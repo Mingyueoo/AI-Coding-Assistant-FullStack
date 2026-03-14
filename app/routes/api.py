@@ -1,6 +1,6 @@
 # @Version :1.0
 # @Author  : Mingyue
-# @File    : api.py.py
+# @File    : api.py
 # @Time    : 02/03/2026 19:54
 import logging
 from flask import Blueprint, request, jsonify
@@ -24,6 +24,7 @@ def _error(msg: str, status: int = 400):
 
 @api_bp.route("/prompts", methods=["POST"])
 def create_prompt():
+    """Create prompt + generation (pending), enqueue task, return 202 immediately."""
     data = request.get_json(silent=True) or {}
     prompt_text = (data.get("prompt_text") or "").strip()
     model_name = (data.get("model_name") or "mock-gpt").strip()
@@ -34,36 +35,43 @@ def create_prompt():
     if model_name not in model_service.SUPPORTED_MODELS:
         return _error(f"Unknown model. Supported: {model_service.SUPPORTED_MODELS}")
 
-    # Persist Prompt
     prompt = Prompt(prompt_text=prompt_text, model_name=model_name)
     db.session.add(prompt)
     db.session.flush()
 
-    # Generate code
     generation = Generation(prompt_id=prompt.id, status="pending")
     db.session.add(generation)
     db.session.flush()
 
-    try:
-        code = task_generate_code.apply_async(
-            args=[prompt_text, model_name],
-            queue="celery",
-        ).get(timeout=120)
-        generation.generated_code = code
-        generation.status = "generated"
-        db.session.commit()
-        logger.info(f"Generated code for prompt_id={prompt.id}")
-        return jsonify({
-            "prompt_id": prompt.id,
-            "generation_id": generation.id,
-            "generated_code": code,
-            "status": generation.status,
-        }), 201
-    except Exception as e:
-        generation.status = "failed"
-        db.session.commit()
-        logger.error(f"Generation failed for prompt_id={prompt.id}: {e}")
-        return _error(f"Code generation failed: {e}", 500)
+    task_generate_code.delay(generation.id, prompt_text, model_name)
+    db.session.commit()
+
+    logger.info(f"Enqueued generation for prompt_id={prompt.id}, generation_id={generation.id}")
+    return jsonify({
+        "prompt_id": prompt.id,
+        "generation_id": generation.id,
+        "status": "pending",
+        "message": "Task queued. Poll GET /api/generations/<id> for result.",
+    }), 202
+
+
+# ── GET /api/generations/<id> ─────────────────────────────────────────────────
+# Polling endpoint for generation status
+
+@api_bp.route("/generations/<int:generation_id>", methods=["GET"])
+def get_generation_status(generation_id: int):
+    """Return generation status for AJAX polling. Used by wait page."""
+    gen = db.session.get(Generation, generation_id)
+    if not gen:
+        return _error("Generation not found", 404)
+
+    return jsonify({
+        "id": gen.id,
+        "prompt_id": gen.prompt_id,
+        "status": gen.status,
+        "generated_code": gen.generated_code,
+        "created_at": gen.created_at.isoformat() if gen.created_at else None,
+    })
 
 
 # ── GET /api/prompts ──────────────────────────────────────────────────────────
@@ -112,10 +120,11 @@ def get_prompt(prompt_id: int):
     return jsonify(result)
 
 
-# ── POST /api/prompts/<id>/evaluate ──────────────────────────────────────────
+# ── POST /api/prompts/<id>/evaluate ────────────────────────────────────────────
 
 @api_bp.route("/prompts/<int:prompt_id>/evaluate", methods=["POST"])
 def evaluate_prompt(prompt_id: int):
+    """Create evaluation (pending), enqueue task, return 202 immediately."""
     prompt = db.session.get(Prompt, prompt_id)
     if not prompt:
         return _error("Prompt not found", 404)
@@ -128,28 +137,43 @@ def evaluate_prompt(prompt_id: int):
     if not latest_gen:
         return _error("No generated code found for this prompt. Generate code first.")
 
-    try:
-        eval_result = task_evaluate_code.apply_async(
-            args=[latest_gen.generated_code],
-            queue="celery",
-        ).get(timeout=60)
-        evaluation = Evaluation(
-            generation_id=latest_gen.id,
-            result=eval_result["result"],
-            error_message=eval_result["error_message"],
-        )
-        db.session.add(evaluation)
-        db.session.commit()
-        logger.info(f"Evaluated generation_id={latest_gen.id}: {eval_result['result']}")
-        return jsonify({
-            "evaluation_id": evaluation.id,
-            "generation_id": latest_gen.id,
-            "evaluation_result": eval_result["result"],
-            "error_message": eval_result["error_message"],
-        })
-    except Exception as e:
-        logger.error(f"Evaluation error: {e}")
-        return _error(f"Evaluation failed: {e}", 500)
+    evaluation = Evaluation(
+        generation_id=latest_gen.id,
+        result="pending",
+        error_message=None,
+    )
+    db.session.add(evaluation)
+    db.session.flush()
+
+    task_evaluate_code.delay(evaluation.id, latest_gen.generated_code)
+    db.session.commit()
+
+    logger.info(f"Enqueued evaluation for generation_id={latest_gen.id}, evaluation_id={evaluation.id}")
+    return jsonify({
+        "evaluation_id": evaluation.id,
+        "generation_id": latest_gen.id,
+        "status": "pending",
+        "message": "Task queued. Poll GET /api/evaluations/<id> for result.",
+    }), 202
+
+
+# ── GET /api/evaluations/<id> ──────────────────────────────────────────────────
+# Polling endpoint for evaluation status
+
+@api_bp.route("/evaluations/<int:evaluation_id>", methods=["GET"])
+def get_evaluation_status(evaluation_id: int):
+    """Return evaluation status for AJAX polling."""
+    ev = db.session.get(Evaluation, evaluation_id)
+    if not ev:
+        return _error("Evaluation not found", 404)
+
+    return jsonify({
+        "id": ev.id,
+        "generation_id": ev.generation_id,
+        "result": ev.result,
+        "error_message": ev.error_message,
+        "created_at": ev.created_at.isoformat() if ev.created_at else None,
+    })
 
 
 # ── GET /api/analytics ────────────────────────────────────────────────────────

@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}Evaluating... – AI Coding Assistant{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-lg-8 text-center py-5">
+    <div class="spinner-border text-success mb-4" role="status" style="width:4rem;height:4rem;">
+      <span class="visually-hidden">Loading...</span>
+    </div>
+    <h4 class="mb-2">Evaluating code...</h4>
+    <p class="text-muted mb-4">Running syntax check and execution. This page will refresh when ready.</p>
+    <p class="small text-muted">Evaluation ID: {{ evaluation.id }}</p>
+    <a href="{{ url_for('web.history') }}" class="btn btn-outline-secondary btn-sm">Cancel & go to History</a>
+  </div>
+</div>
+
+<script>
+(function poll() {
+  fetch("{{ url_for('api.get_evaluation_status', evaluation_id=evaluation.id) }}")
+    .then(r => r.json())
+    .then(data => {
+      if (data.result && data.result !== "pending") {
+        window.location.href = "{{ url_for('web.history') }}?evaluated=1";
+        return;
+      }
+      setTimeout(poll, 1500);
+    })
+    .catch(() => setTimeout(poll, 2000));
+})();
+</script>
+{% endblock %}

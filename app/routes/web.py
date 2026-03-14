@@ -1,11 +1,11 @@
 # @Version :1.0
 # @Author  : Mingyue
-# @File    : web.py.py
+# @File    : web.py
 # @Time    : 02/03/2026 19:56
 import logging
 from flask import Blueprint, render_template, request, redirect, url_for, flash
 from app.db import db
-from app.models import Prompt, Generation
+from app.models import Prompt, Generation, Evaluation
 from app.services import model_service
 from app.workers.tasks import task_generate_code, task_evaluate_code
 
@@ -21,6 +21,7 @@ def index():
 
 @web_bp.route("/generate", methods=["POST"])
 def generate():
+    """Create records, enqueue task, redirect to wait page immediately."""
     prompt_text = (request.form.get("prompt_text") or "").strip()
     model_name = (request.form.get("model_name") or "mock-gpt").strip()
 
@@ -28,17 +29,6 @@ def generate():
         flash("Please enter a prompt.", "warning")
         return redirect(url_for("web.index"))
 
-    from app.routes.api import create_prompt
-    from flask import current_app
-    with current_app.test_request_context(
-        "/api/prompts",
-        method="POST",
-        json={"prompt_text": prompt_text, "model_name": model_name},
-    ):
-        # Use the service layer directly instead
-        pass
-
-    # Direct service call
     prompt = Prompt(prompt_text=prompt_text, model_name=model_name)
     db.session.add(prompt)
     db.session.flush()
@@ -47,34 +37,43 @@ def generate():
     db.session.add(generation)
     db.session.flush()
 
-    error = None
-    try:
-        code = task_generate_code.apply_async(
-            args=[prompt_text, model_name],
-            queue="celery",
-        ).get(timeout=120)
-        generation.generated_code = code
-        generation.status = "generated"
-    except Exception as e:
-        generation.status = "failed"
-        error = str(e)
-        logger.error(f"Web generation failed: {e}")
-    finally:
-        db.session.commit()
+    task_generate_code.delay(generation.id, prompt_text, model_name)
+    db.session.commit()
 
+    return redirect(url_for("web.generate_wait", generation_id=generation.id))
+
+
+@web_bp.route("/generate/wait/<int:generation_id>")
+def generate_wait(generation_id: int):
+    """Wait page: polls API until status is generated or failed."""
+    gen = db.session.get(Generation, generation_id)
+    if not gen:
+        flash("Generation not found.", "danger")
+        return redirect(url_for("web.index"))
+    return render_template("generate_wait.html", generation=gen)
+
+
+@web_bp.route("/generate/result/<int:generation_id>")
+def generate_result(generation_id: int):
+    """Show result after generation completes."""
+    generation = db.session.get(Generation, generation_id)
+    if not generation:
+        flash("Generation not found.", "danger")
+        return redirect(url_for("web.index"))
+    prompt = db.session.get(Prompt, generation.prompt_id)
     return render_template(
         "result.html",
         prompt=prompt,
         generation=generation,
-        error=error,
+        error=None if generation.status == "generated" else "Code generation failed",
     )
 
 
 @web_bp.route("/history")
 def history():
     page = request.args.get("page", 1, type=int)
-    model_filter = request.args.get("model_name", "")
-    status_filter = request.args.get("status", "")
+    model_filter = request.form.get("model_name") or request.args.get("model_name", "")
+    status_filter = request.form.get("status") or request.args.get("status", "")
 
     query = Prompt.query.order_by(Prompt.created_at.desc())
     if model_filter:
@@ -113,7 +112,7 @@ def dashboard():
 
 @web_bp.route("/evaluate/<int:prompt_id>", methods=["POST"])
 def evaluate(prompt_id: int):
-    from app.services import evaluation_service
+    """Create evaluation (pending), enqueue task, redirect to wait page."""
     prompt = db.session.get(Prompt, prompt_id)
     if not prompt:
         flash("Prompt not found.", "danger")
@@ -128,17 +127,26 @@ def evaluate(prompt_id: int):
         flash("No generated code to evaluate.", "warning")
         return redirect(url_for("web.history"))
 
-    from app.models import Evaluation
-    eval_result = task_evaluate_code.apply_async(
-        args=[latest_gen.generated_code],
-        queue="celery",
-    ).get(timeout=60)
-    ev = Evaluation(
+    evaluation = Evaluation(
         generation_id=latest_gen.id,
-        result=eval_result["result"],
-        error_message=eval_result["error_message"],
+        result="pending",
+        error_message=None,
     )
-    db.session.add(ev)
+    db.session.add(evaluation)
+    db.session.flush()
+
+    task_evaluate_code.delay(evaluation.id, latest_gen.generated_code)
     db.session.commit()
-    flash(f"Evaluation complete: {eval_result['result'].replace('_', ' ').title()}", "success")
-    return redirect(url_for("web.history"))
+
+    return redirect(url_for("web.evaluate_wait", evaluation_id=evaluation.id))
+
+
+@web_bp.route("/evaluate/wait/<int:evaluation_id>")
+def evaluate_wait(evaluation_id: int):
+    """Wait page: polls API until evaluation completes."""
+    ev = db.session.get(Evaluation, evaluation_id)
+    if not ev:
+        flash("Evaluation not found.", "danger")
+        return redirect(url_for("web.history"))
+    return render_template("evaluate_wait.html", evaluation=ev)
+
